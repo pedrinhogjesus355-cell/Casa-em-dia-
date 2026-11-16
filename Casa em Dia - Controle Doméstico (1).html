@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casa em Dia — Controle Compartilhado</title>
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased transition-colors duration-200 min-h-screen flex flex-col">
+
+    <!-- Notificação Toast Flutuante -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Modal de Gerenciamento de Moradores e Configurações -->
+    <div id="settings-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-500 rounded-xl">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="font-display font-bold text-lg">Configurações da Casa</h3>
+                </div>
+                <button onclick="closeModal('settings-modal')" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Orçamento Mensal -->
+            <div class="mb-6">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Meta de Orçamento Mensal (R$)</label>
+                <div class="flex gap-2">
+                    <input type="number" id="modal-budget-input" step="50" min="0" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <button onclick="saveBudgetFromModal()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl transition">Salvar</button>
+                </div>
+            </div>
+
+            <!-- Moradores da Casa -->
+            <div class="mb-6">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Moradores da Casa</label>
+                <div id="residents-list" class="space-y-2 mb-3 max-h-44 overflow-y-auto pr-1"></div>
+                <form onsubmit="addResident(event)" class="flex gap-2">
+                    <input type="text" id="new-resident-name" placeholder="Nome do novo morador..." required class="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    <button type="submit" class="px-3.5 py-2 bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition flex items-center gap-1 shrink-0">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Adicionar
+                    </button>
+                </form>
+            </div>
+
+            <!-- Zona de Dados -->
+            <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-2 justify-between items-center">
+                <button onclick="resetToEmpty()" class="w-full sm:w-auto px-3.5 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-xl transition flex items-center justify-center gap-1.5">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Começar do Zero (Limpar Tudo)
+                </button>
+                <button onclick="restoreSampleData()" class="w-full sm:w-auto px-3.5 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+                    Restaurar Exemplos
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação Customizado (Substitui confirm() nativo) -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-xl">
+            <h4 id="confirm-title" class="font-display font-bold text-base mb-2">Confirmar ação</h4>
+            <p id="confirm-message" class="text-sm text-slate-600 dark:text-slate-400 mb-5">Tem certeza que deseja continuar?</p>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('confirm-modal')" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">Cancelar</button>
+                <button id="confirm-action-btn" class="px-4 py-2 text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl transition">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cabeçalho Superior -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+            <!-- Logo -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-sm shadow-brand-600/20">
+                    <i data-lucide="home" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="font-display font-bold text-base sm:text-lg leading-tight tracking-tight">Casa em Dia</h1>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">Gastos & Despensa Compartilhada</p>
+                </div>
+            </div>
+
+            <!-- Controles Direita -->
+            <div class="flex items-center gap-2">
+                <!-- Seletor de Mês -->
+                <div class="relative">
+                    <input type="month" id="month-filter" onchange="renderAll()" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <!-- Exportar CSV -->
+                <button onclick="exportCSV()" title="Exportar Planilha CSV" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 text-xs font-medium">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span class="hidden md:inline">Exportar CSV</span>
+                </button>
+
+                <!-- Moradores / Config -->
+                <button onclick="openSettingsModal()" title="Moradores e Orçamento" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 text-xs font-medium">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span class="hidden md:inline">Moradores</span>
+                </button>
+
+                <!-- Alternar Tema Claro/Escuro -->
+                <button onclick="toggleTheme()" title="Alternar Tema" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition">
+                    <i data-lucide="moon" class="w-4 h-4 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block text-amber-400"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navegação por Abas -->
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto no-scrollbar">
+            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-brand-600 text-brand-600 dark:text-brand-400 flex items-center gap-2 whitespace-nowrap transition">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Visão Geral
+            </button>
+            <button onclick="switchTab('expenses')" id="tab-btn-expenses" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap transition">
+                <i data-lucide="receipt" class="w-4 h-4"></i> Planilha de Gastos
+            </button>
+            <button onclick="switchTab('pantry')" id="tab-btn-pantry" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 whitespace-nowrap transition">
+                <i data-lucide="shopping-basket" class="w-4 h-4"></i> Alimentos & Despensa
+                <span id="pantry-badge" class="hidden px-1.5 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 rounded-full">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+
+        <!-- =========================================================
+             ABA 1: VISÃO GERAL (DASHBOARD)
+             ========================================================= -->
+        <section id="tab-dashboard" class="space-y-6">
+            
+            <!-- Cards de Resumo Topo -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Total Gasto -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Gasto no Mês</span>
+                        <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                            <i data-lucide="wallet" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div id="dash-total-spent" class="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-white">R$ 0,00</div>
+                    <p id="dash-expense-count" class="text-xs text-slate-500 dark:text-slate-400 mt-1">0 lançamentos registrados</p>
+                </div>
+
+                <!-- Orçamento & Progresso -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Orçamento Mensal</span>
+                        <button onclick="openSettingsModal()" class="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1">
+                            <i data-lucide="pencil" class="w-3 h-3"></i> Editar
+                        </button>
+                    </div>
+                    <div class="flex items-baseline justify-between">
+                        <span id="dash-budget-value" class="font-display font-bold text-2xl text-slate-900 dark:text-white">R$ 0,00</span>
+                        <span id="dash-budget-percent" class="text-xs font-bold text-emerald-600">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
+                        <div id="dash-budget-bar" class="bg-brand-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <p id="dash-budget-remaining" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">Disponível: R$ 0,00</p>
+                </div>
+
+                <!-- Média por Morador -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Custo Justo / Pessoa</span>
+                        <div class="p-2 bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 rounded-xl">
+                            <i data-lucide="split" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div id="dash-per-person" class="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-white">R$ 0,00</div>
+                    <p id="dash-residents-count" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Dividido entre 2 moradores</p>
+                </div>
+
+                <!-- Alertas da Despensa -->
+                <div onclick="switchTab('pantry')" class="cursor-pointer bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-500/50 rounded-2xl p-5 shadow-sm transition">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Alerta Despensa</span>
+                        <div class="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
+                            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                    <div id="dash-pantry-alerts" class="font-display font-bold text-2xl sm:text-3xl text-slate-900 dark:text-white">0 itens</div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1 font-medium">
+                        Ver lista de compras <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Grid Secundário: Gráfico por Categoria + Acerto de Contas -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Gastos por Categoria -->
+                <div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between mb-5">
+                        <div>
+                            <h2 class="font-display font-bold text-base sm:text-lg">Gastos por Categoria</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Distribuição das despesas no mês selecionado</p>
+                        </div>
+                        <button onclick="switchTab('expenses')" class="px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition">
+                            + Lançar Gasto
+                        </button>
+                    </div>
+                    <div id="category-bars-container" class="space-y-4">
+                        <!-- Barras geradas via JS -->
+                    </div>
+                </div>
+
+                <!-- Calculadora de Acerto de Contas -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <i data-lucide="scale" class="w-5 h-5 text-brand-600"></i>
+                            <h2 class="font-display font-bold text-base sm:text-lg">Acerto de Contas</h2>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-5">Quem pagou o quê e como empatar as contas compartilhadas</p>
+
+                        <!-- Resumo individual -->
+                        <div id="settlement-balances" class="space-y-3 mb-5"></div>
+                    </div>
+
+                    <!-- Sugestão de Transferência -->
+                    <div id="settlement-suggestion" class="p-4 bg-brand-50/70 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-500/20 rounded-xl text-xs text-slate-700 dark:text-slate-200">
+                        Tudo empatado por aqui!
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prévia Rápida: Itens Acabando & Últimos Gastos -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Últimos Lançamentos -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-display font-bold text-base">Últimos Gastos Lançados</h3>
+                        <button onclick="switchTab('expenses')" class="text-xs font-semibold text-brand-600 hover:underline">Ver todos</button>
+                    </div>
+                    <div id="dash-recent-expenses" class="divide-y divide-slate-100 dark:divide-slate-800"></div>
+                </div>
+
+                <!-- Lista de Compras Rápida -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-display font-bold text-base">Precisa Comprar (Despensa)</h3>
+                        <button onclick="copyShoppingList()" class="px-2.5 py-1 text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 rounded-lg transition flex items-center gap-1">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar p/ WhatsApp
+                        </button>
+                    </div>
+                    <div id="dash-shopping-preview" class="space-y-2"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             ABA 2: PLANILHA DE GASTOS
+             ========================================================= -->
+        <section id="tab-expenses" class="hidden space-y-6">
+            
+            <!-- Formulário Rápido Estilo Planilha -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-display font-bold text-base sm:text-lg flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-5 h-5 text-brand-600"></i>
+                        <span id="expense-form-title">Novo Lançamento de Gasto</span>
+                    </h2>
+                    <button type="button" id="cancel-edit-expense-btn" onclick="resetExpenseForm()" class="hidden text-xs font-medium text-slate-500 hover:text-slate-700">Cancelar edição</button>
+                </div>
+
+                <form id="expense-form" onsubmit="handleExpenseSubmit(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+                    <input type="hidden" id="exp-id">
+                    
+                    <div class="lg:col-span-3">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Descrição</label>
+                        <input type="text" id="exp-desc" placeholder="Ex: Compra semanal mercado" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Valor (R$)</label>
+                        <input type="number" id="exp-amount" step="0.01" min="0.01" placeholder="0,00" required class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Categoria</label>
+                        <select id="exp-category" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <option value="Mercado">🛒 Mercado</option>
+                            <option value="Contas da Casa">⚡ Contas da Casa</option>
+                            <option value="Delivery & Lazer">🍕 Delivery & Lazer</option>
+                            <option value="Limpeza & Higiene">🧼 Limpeza & Higiene</option>
+                            <option value="Outros">📦 Outros</option>
+                        </select>
+                    </div>
+
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Quem Pagou</label>
+                        <select id="exp-payer" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            <!-- Populado via JS -->
+                        </select>
+                    </div>
+
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Data</label>
+                        <input type="date" id="exp-date" required class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+
+                    <div class="lg:col-span-1">
+                        <button type="submit" class="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center gap-1 shadow-sm">
+                            <i data-lucide="check" class="w-4 h-4"></i> <span class="lg:hidden">Salvar Lançamento</span>
+                        </button>
+                    </div>
+
+                    <div class="sm:col-span-2 lg:col-span-12 pt-1 flex items-center justify-between">
+                        <label class="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-600 dark:text-slate-300 select-none">
+                            <input type="checkbox" id="exp-shared" checked class="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300">
+                            <span>Dividir igualmente entre todos os moradores da casa (entra no acerto de contas)</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Filtros e Tabela Estilo Planilha -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                <!-- Barra de Filtros -->
+                <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                    <div class="relative w-full sm:w-64">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="exp-search" oninput="renderExpensesTable()" placeholder="Buscar gasto..." class="w-full pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+
+                    <div class="flex w-full sm:w-auto gap-2">
+                        <select id="filter-category" onchange="renderExpensesTable()" class="w-1/2 sm:w-auto px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none">
+                            <option value="ALL">Todas Categorias</option>
+                            <option value="Mercado">Mercado</option>
+                            <option value="Contas da Casa">Contas da Casa</option>
+                            <option value="Delivery & Lazer">Delivery & Lazer</option>
+                            <option value="Limpeza & Higiene">Limpeza & Higiene</option>
+                            <option value="Outros">Outros</option>
+                        </select>
+
+                        <select id="filter-payer" onchange="renderExpensesTable()" class="w-1/2 sm:w-auto px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none">
+                            <option value="ALL">Todos Moradores</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Tabela Responsiva -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                <th class="py-3.5 px-4">Data</th>
+                                <th class="py-3.5 px-4">Descrição</th>
+                                <th class="py-3.5 px-4">Categoria</th>
+                                <th class="py-3.5 px-4">Pago por</th>
+                                <th class="py-3.5 px-4">Divisão</th>
+                                <th class="py-3.5 px-4 text-right">Valor</th>
+                                <th class="py-3.5 px-4 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenses-table-body" class="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                            <!-- Linhas geradas via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Rodapé da Planilha -->
+                <div class="p-4 bg-slate-50/80 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs sm:text-sm">
+                    <span id="table-count-label" class="text-slate-500">Mostrando 0 gastos</span>
+                    <div class="font-display font-bold text-slate-900 dark:text-white">
+                        Total Filtrado: <span id="table-total-label" class="text-brand-600 dark:text-brand-400">R$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =========================================================
+             ABA 3: ALIMENTOS, DESPENSA E LISTA DE COMPRAS
+             ========================================================= -->
+        <section id="tab-pantry" class="hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Coluna Esquerda (2/3): Controle de Estoque / Consumo -->
+                <div class="lg:col-span-2 space-y-5">
+                    
+                    <!-- Adicionar Item à Despensa -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                        <h2 class="font-display font-bold text-base mb-3 flex items-center gap-2">
+                            <i data-lucide="package-plus" class="w-5 h-5 text-brand-600"></i>
+                            Cadastrar Alimento ou Item da Casa
+                        </h2>
+                        <form onsubmit="addPantryItem(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                            <input type="text" id="pantry-name" placeholder="Nome (ex: Café em pó, Leite, Arroz...)" required class="sm:col-span-5 px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                            
+                            <select id="pantry-category" class="sm:col-span-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none">
+                                <option value="Mercearia">🌾 Mercearia</option>
+                                <option value="Geladeira & Frios">🥛 Geladeira & Frios</option>
+                                <option value="Hortifruti">🥦 Hortifruti</option>
+                                <option value="Carnes & Proteínas">🥩 Carnes & Ovos</option>
+                                <option value="Limpeza & Higiene">🧼 Limpeza</option>
+                            </select>
+
+                            <select id="pantry-status" class="sm:col-span-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none">
+                                <option value="ok">🟢 Cheio / Ok</option>
+                                <option value="half">🔵 Na metade</option>
+                                <option value="low">🟡 Acabando</option>
+                                <option value="empty">🔴 Acabou</option>
+                            </select>
+
+                            <button type="submit" class="sm:col-span-1 py-2.5 px-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition flex items-center justify-center">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Filtros de Categoria da Despensa -->
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex gap-1.5 overflow-x-auto pb-1" id="pantry-filter-pills">
+                            <button onclick="setPantryFilter('ALL')" class="pantry-pill active px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900">Todos</button>
+                            <button onclick="setPantryFilter('Mercearia')" class="pantry-pill px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">Mercearia</button>
+                            <button onclick="setPantryFilter('Geladeira & Frios')" class="pantry-pill px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">Geladeira</button>
+                            <button onclick="setPantryFilter('Hortifruti')" class="pantry-pill px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">Hortifruti</button>
+                            <button onclick="setPantryFilter('Carnes & Proteínas')" class="pantry-pill px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">Carnes/Ovos</button>
+                            <button onclick="setPantryFilter('Limpeza & Higiene')" class="pantry-pill px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300">Limpeza</button>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Alimentos -->
+                    <div id="pantry-items-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Cards gerados via JS -->
+                    </div>
+                </div>
+
+                <!-- Coluna Direita (1/3): Lista de Compras Automática -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit sticky top-28">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <div class="p-2 bg-amber-50 dark:bg-amber-500/10 text-amber-600 rounded-xl">
+                                <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                            </div>
+                            <h2 class="font-display font-bold text-base">Lista de Compras</h2>
+                        </div>
+                        <span id="shopping-count-pill" class="px-2.5 py-0.5 text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 rounded-full">0</span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                        Gerada automaticamente com itens marcados como <strong>Acabando</strong> ou <strong>Acabou</strong>.
+                    </p>
+
+                    <div id="shopping-list-container" class="space-y-2 mb-5 max-h-80 overflow-y-auto pr-1">
+                        <!-- Itens da lista -->
+                    </div>
+
+                    <div class="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <button onclick="copyShoppingList()" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="share-2" class="w-4 h-4"></i> Copiar Lista para WhatsApp
+                        </button>
+                        <button onclick="markAllBought()" class="w-full py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5">
+                            <i data-lucide="check-check" class="w-4 h-4 text-brand-600"></i> Marcar Tudo como Comprado (Cheio)
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Script Principal da Aplicação -->
+    <script>
+        // =========================================================================
+        // ESTADO E DADOS INICIAIS (PERSISTÊNCIA EM LOCALSTORAGE)
+        // =========================================================================
+        const STORAGE_KEY = 'casa_em_dia_v1';
+
+        const getCurrentMonthStr = () => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        };
+
+        const getTodayStr = () => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        };
+
+        // Dados de exemplo realistas para o primeiro acesso
+        const getDefaultState = () => {
+            const ym = getCurrentMonthStr();
+            return {
+                budget: 2800,
+                residents: ['Eu', 'Morador 2'],
+                expenses: [
+                    { id: '1', desc: 'Compra do mês (Supermercado)', amount: 645.80, category: 'Mercado', payer: 'Eu', date: `${ym}-03`, shared: true },
+                    { id: '2', desc: 'Conta de Energia Elétrica', amount: 189.40, category: 'Contas da Casa', payer: 'Morador 2', date: `${ym}-05`, shared: true },
+                    { id: '3', desc: 'Internet Fibra Casa', amount: 119.90, category: 'Contas da Casa', payer: 'Eu', date: `${ym}-07`, shared: true },
+                    { id: '4', desc: 'Feira e Hortifruti', amount: 94.50, category: 'Mercado', payer: 'Morador 2', date: `${ym}-10`, shared: true },
+                    { id: '5', desc: 'Pizza de sexta-feira', amount: 88.00, category: 'Delivery & Lazer', payer: 'Eu', date: `${ym}-12`, shared: true },
+                    { id: '6', desc: 'Produtos de limpeza e sabão', amount: 67.30, category: 'Limpeza & Higiene', payer: 'Morador 2', date: `${ym}-14`, shared: true }
+                ],
+                pantry: [
+                    { id: 'p1', name: 'Arroz Branco 5kg', category: 'Mercearia', status: 'ok', updatedAt: getTodayStr() },
+                    { id: 'p2', name: 'Café Torrado e Moído', category: 'Mercearia', status: 'low', updatedAt: getTodayStr() },
+                    { id: 'p3', name: 'Leite Integral (Caixa)', category: 'Geladeira & Frios', status: 'empty', updatedAt: getTodayStr() },
+                    { id: 'p4', name: 'Peito de Frango', category: 'Carnes & Proteínas', status: 'half', updatedAt: getTodayStr() },
+                    { id: 'p5', name: 'Ovos Brancos (Cartela)', category: 'Carnes & Proteínas', status: 'low', updatedAt: getTodayStr() },
+                    { id: 'p6', name: 'Detergente Líquido', category: 'Limpeza & Higiene', status: 'ok', updatedAt: getTodayStr() },
+                    { id: 'p7', name: 'Banana e Maçã', category: 'Hortifruti', status: 'empty', updatedAt: getTodayStr() },
+                    { id: 'p8', name: 'Azeite de Oliva', category: 'Mercearia', status: 'half', updatedAt: getTodayStr() }
+                ]
+            };
+        };
+
+        let appState = loadState();
+        let currentPantryFilter = 'ALL';
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) return JSON.parse(raw);
+            } catch (e) {
+                console.error('Erro ao ler localStorage:', e);
+            }
+            const initial = getDefaultState();
+            saveState(initial);
+            return initial;
+        }
+
+        function saveState(stateToSave = appState) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+            } catch (e) {
+                console.error('Erro ao salvar localStorage:', e);
+            }
+        }
+
+        // =========================================================================
+        // UTILITÁRIOS DE FORMATAÇÃO E UI
+        // =========================================================================
+        const formatBRL = (val) => {
+            return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        };
+
+        const formatDateBR = (dateStr) => {
+            if (!dateStr) return '';
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+        };
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgClass = type === 'success' 
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' 
+                : 'bg-amber-600 text-white';
+            
+            toast.className = `${bgClass} px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-2 opacity-0 pointer-events-auto`;
+            toast.innerHTML = `<i data-lucide="${type === 'success' ? 'check-circle-2' : 'info'}" class="w-4 h-4 text-emerald-400 dark:text-emerald-600"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            const btn = document.getElementById('confirm-action-btn');
+            btn.onclick = () => {
+                onConfirm();
+                closeModal('confirm-modal');
+            };
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // =========================================================================
+        // TEMA ESCURO / CLARO & NAVEGAÇÃO POR ABAS
+        // =========================================================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            localStorage.setItem('casa_theme', html.classList.contains('dark') ? 'dark' : 'light');
+        }
+
+        function initTheme() {
+            const saved = localStorage.getItem('casa_theme');
+            if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        }
+
+        function switchTab(tabName) {
+            ['dashboard', 'expenses', 'pantry'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`tab-btn-${t}`);
+                btn.classList.remove('border-brand-600', 'text-brand-600', 'dark:text-brand-400', 'font-semibold');
+                btn.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400', 'font-medium');
+            });
+
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+            activeBtn.classList.add('border-brand-600', 'text-brand-600', 'dark:text-brand-400', 'font-semibold');
+            activeBtn.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400', 'font-medium');
+        }
+
+        // =========================================================================
+        // GERENCIAMENTO DE MORADORES E CONFIGURAÇÕES
+        // =========================================================================
+        function openSettingsModal() {
+            document.getElementById('modal-budget-input').value = appState.budget;
+            renderResidentsListModal();
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function saveBudgetFromModal() {
+            const val = parseFloat(document.getElementById('modal-budget-input').value);
+            if (!isNaN(val) && val >= 0) {
+                appState.budget = val;
+                saveState();
+                renderAll();
+                showToast('Orçamento mensal atualizado!');
+            }
+        }
+
+        function renderResidentsListModal() {
+            const container = document.getElementById('residents-list');
+            container.innerHTML = appState.residents.map((name, idx) => `
+                <div class="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 text-xs font-bold flex items-center justify-center">${name.charAt(0).toUpperCase()}</span>
+                        <span class="text-sm font-medium">${name}</span>
+                    </div>
+                    ${appState.residents.length > 1 ? `
+                        <button onclick="removeResident(${idx})" class="text-slate-400 hover:text-rose-500 p-1 rounded-lg transition" title="Remover morador">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    ` : '<span class="text-[10px] text-slate-400">Principal</span>'}
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function addResident(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-resident-name');
+            const name = input.value.trim();
+            if (!name) return;
+            if (appState.residents.includes(name)) {
+                showToast('Já existe um morador com esse nome.', 'info');
+                return;
+            }
+            appState.residents.push(name);
+            input.value = '';
+            saveState();
+            renderResidentsListModal();
+            populateResidentSelects();
+            renderAll();
+            showToast(`${name} adicionado(a) à casa!`);
+        }
+
+        function removeResident(index) {
+            if (appState.residents.length <= 1) return;
+            appState.residents.splice(index, 1);
+            saveState();
+            renderResidentsListModal();
+            populateResidentSelects();
+            renderAll();
+            showToast('Morador removido.');
+        }
+
+        function populateResidentSelects() {
+            const payerSelect = document.getElementById('exp-payer');
+            const filterSelect = document.getElementById('filter-payer');
+            
+            const currentPayer = payerSelect.value;
+            payerSelect.innerHTML = appState.residents.map(r => `<option value="${r}">${r}</option>`).join('');
+            if (appState.residents.includes(currentPayer)) payerSelect.value = currentPayer;
+
+            const currentFilter = filterSelect.value;
+            filterSelect.innerHTML = `<option value="ALL">Todos Moradores</option>` + 
+                appState.residents.map(r => `<option value="${r}">${r}</option>`).join('');
+            filterSelect.value = currentFilter || 'ALL';
+        }
+
+        function resetToEmpty() {
+            openConfirmModal(
+                'Começar do zero?',
+                'Isso apagará todos os gastos e alimentos cadastrados atualmente para você começar sua planilha limpa.',
+                () => {
+                    appState.expenses = [];
+                    appState.pantry = [];
+                    saveState();
+                    closeModal('settings-modal');
+                    renderAll();
+                    showToast('Dados limpos! Pronto para começar.');
+                }
+            );
+        }
+
+        function restoreSampleData() {
+            appState = getDefaultState();
+            saveState();
+            closeModal('settings-modal');
+            populateResidentSelects();
+            renderAll();
+            showToast('Dados de exemplo restaurados!');
+        }
+
+        // =========================================================================
+        // LÓGICA DE GASTOS (PLANILHA & ACERTO DE CONTAS)
+        // =========================================================================
+        function getFilteredMonthExpenses() {
+            const selectedMonth = document.getElementById('month-filter').value; // YYYY-MM
+            return appState.expenses
+                .filter(exp => !selectedMonth || exp.date.startsWith(selectedMonth))
+                .sort((a, b) => b.date.localeCompare(a.date));
+        }
+
+        function handleExpenseSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('exp-id').value;
+            const desc = document.getElementById('exp-desc').value.trim();
+            const amount = parseFloat(document.getElementById('exp-amount').value);
+            const category = document.getElementById('exp-category').value;
+            const payer = document.getElementById('exp-payer').value;
+            const date = document.getElementById('exp-date').value;
+            const shared = document.getElementById('exp-shared').checked;
+
+            if (!desc || isNaN(amount) || amount <= 0 || !date) return;
+
+            if (id) {
+                const idx = appState.expenses.findIndex(x => x.id === id);
+                if (idx !== -1) {
+                    appState.expenses[idx] = { id, desc, amount, category, payer, date, shared };
+                    showToast('Gasto atualizado!');
+                }
+            } else {
+                appState.expenses.push({
+                    id: Date.now().toString(),
+                    desc, amount, category, payer, date, shared
+                });
+                showToast('Gasto lançado na planilha!');
+            }
+
+            saveState();
+            resetExpenseForm();
+            renderAll();
+        }
+
+        function editExpense(id) {
+            const exp = appState.expenses.find(x => x.id === id);
+            if (!exp) return;
+
+            document.getElementById('exp-id').value = exp.id;
+            document.getElementById('exp-desc').value = exp.desc;
+            document.getElementById('exp-amount').value = exp.amount;
+            document.getElementById('exp-category').value = exp.category;
+            document.getElementById('exp-payer').value = exp.payer;
+            document.getElementById('exp-date').value = exp.date;
+            document.getElementById('exp-shared').checked = exp.shared;
+
+            document.getElementById('expense-form-title').textContent = 'Editando Lançamento';
+            document.getElementById('cancel-edit-expense-btn').classList.remove('hidden');
+            document.getElementById('exp-desc').focus();
+        }
+
+        function resetExpenseForm() {
+            document.getElementById('expense-form').reset();
+            document.getElementById('exp-id').value = '';
+            document.getElementById('exp-date').value = getTodayStr();
+            document.getElementById('exp-shared').checked = true;
+            document.getElementById('expense-form-title').textContent = 'Novo Lançamento de Gasto';
+            document.getElementById('cancel-edit-expense-btn').classList.add('hidden');
+        }
+
+        function deleteExpense(id) {
+            openConfirmModal('Excluir lançamento?', 'Deseja remover este gasto da planilha?', () => {
+                appState.expenses = appState.expenses.filter(x => x.id !== id);
+                saveState();
+                renderAll();
+                showToast('Gasto removido.');
+            });
+        }
+
+        function renderExpensesTable() {
+            const monthExpenses = getFilteredMonthExpenses();
+            const search = document.getElementById('exp-search').value.toLowerCase();
+            const catFilter = document.getElementById('filter-category').value;
+            const payerFilter = document.getElementById('filter-payer').value;
+
+            const filtered = monthExpenses.filter(exp => {
+                const matchSearch = exp.desc.toLowerCase().includes(search);
+                const matchCat = catFilter === 'ALL' || exp.category === catFilter;
+                const matchPayer = payerFilter === 'ALL' || exp.payer === payerFilter;
+                return matchSearch && matchCat && matchPayer;
+            });
+
+            const tbody = document.getElementById('expenses-table-body');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-10 text-center text-slate-400 text-sm">
+                            Nenhum gasto encontrado para os filtros selecionados.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tbody.innerHTML = filtered.map(exp => `
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                        <td class="py-3.5 px-4 text-xs text-slate-500 whitespace-nowrap">${formatDateBR(exp.date)}</td>
+                        <td class="py-3.5 px-4 font-medium text-slate-900 dark:text-slate-100">${exp.desc}</td>
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                                ${exp.category}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                <span class="w-2 h-2 rounded-full bg-brand-500"></span> ${exp.payer}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            ${exp.shared 
+                                ? '<span class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md">Compartilhado</span>' 
+                                : '<span class="text-[11px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">Individual</span>'}
+                        </td>
+                        <td class="py-3.5 px-4 text-right font-display font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                            ${formatBRL(exp.amount)}
+                        </td>
+                        <td class="py-3.5 px-4 text-center whitespace-nowrap">
+                            <div class="inline-flex items-center gap-1">
+                                <button onclick="editExpense('${exp.id}')" title="Editar" class="p-1.5 text-slate-400 hover:text-brand-600 rounded-lg transition">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteExpense('${exp.id}')" title="Excluir" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            const totalFiltered = filtered.reduce((acc, item) => acc + item.amount, 0);
+            document.getElementById('table-count-label').textContent = `Mostrando ${filtered.length} ${filtered.length === 1 ? 'lançamento' : 'lançamentos'}`;
+            document.getElementById('table-total-label').textContent = formatBRL(totalFiltered);
+            lucide.createIcons();
+        }
+
+        // =========================================================================
+        // LÓGICA DE ALIMENTOS, DESPENSA & LISTA DE COMPRAS
+        // =========================================================================
+        const STATUS_META = {
+            ok:    { label: 'Cheio / Ok',  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20', dot: 'bg-emerald-500' },
+            half:  { label: 'Na metade',   badge: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/10 dark:text-sky-400 dark:border-sky-500/20', dot: 'bg-sky-500' },
+            low:   { label: 'Acabando',    badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20', dot: 'bg-amber-500' },
+            empty: { label: 'Acabou',      badge: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20', dot: 'bg-rose-500' }
+        };
+
+        function addPantryItem(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('pantry-name');
+            const name = nameInput.value.trim();
+            const category = document.getElementById('pantry-category').value;
+            const status = document.getElementById('pantry-status').value;
+
+            if (!name) return;
+
+            appState.pantry.unshift({
+                id: 'p' + Date.now(),
+                name,
+                category,
+                status,
+                updatedAt: getTodayStr()
+            });
+
+            nameInput.value = '';
+            saveState();
+            renderAll();
+            showToast(`${name} adicionado à despensa!`);
+        }
+
+        function updatePantryStatus(id, newStatus) {
+            const item = appState.pantry.find(x => x.id === id);
+            if (!item) return;
+            item.status = newStatus;
+            item.updatedAt = getTodayStr();
+            saveState();
+            renderAll();
+        }
+
+        function deletePantryItem(id) {
+            appState.pantry = appState.pantry.filter(x => x.id !== id);
+            saveState();
+            renderAll();
+            showToast('Item removido da despensa.');
+        }
+
+        function setPantryFilter(cat) {
+            currentPantryFilter = cat;
+            document.querySelectorAll('.pantry-pill').forEach(btn => {
+                const isMatch = (cat === 'ALL' && btn.textContent === 'Todos') || btn.textContent.includes(cat.split(' ')[0]);
+                if (isMatch) {
+                    btn.className = 'pantry-pill px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 transition';
+                } else {
+                    btn.className = 'pantry-pill px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition';
+                }
+            });
+            renderPantry();
+        }
+
+        function renderPantry() {
+            const grid = document.getElementById('pantry-items-grid');
+            const items = currentPantryFilter === 'ALL' 
+                ? appState.pantry 
+                : appState.pantry.filter(i => i.category === currentPantryFilter);
+
+            if (items.length === 0) {
+                grid.innerHTML = `
+                    <div class="sm:col-span-2 bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-8 text-center text-slate-400 text-sm">
+                        Nenhum alimento cadastrado nesta categoria.
+                    </div>
+                `;
+            } else {
+                grid.innerHTML = items.map(item => {
+                    const meta = STATUS_META[item.status] || STATUS_META.ok;
+                    return `
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between gap-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <span class="text-[11px] font-medium text-slate-400">${item.category}</span>
+                                    <h4 class="font-semibold text-sm sm:text-base text-slate-900 dark:text-white">${item.name}</h4>
+                                </div>
+                                <button onclick="deletePantryItem('${item.id}')" class="text-slate-300 hover:text-rose-500 p-1 rounded-lg transition" title="Remover item">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+
+                            <!-- Botões Rápidos de Nível de Consumo -->
+                            <div>
+                                <div class="grid grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                                    ${['ok', 'half', 'low', 'empty'].map(st => {
+                                        const active = item.status === st;
+                                        const labels = { ok: 'Cheio', half: 'Metade', low: 'Acabando', empty: 'Acabou' };
+                                        const activeColors = {
+                                            ok: 'bg-emerald-600 text-white shadow-sm',
+                                            half: 'bg-sky-600 text-white shadow-sm',
+                                            low: 'bg-amber-500 text-white shadow-sm',
+                                            empty: 'bg-rose-600 text-white shadow-sm'
+                                        };
+                                        return `
+                                            <button onclick="updatePantryStatus('${item.id}', '${st}')" 
+                                                class="py-1.5 px-1 rounded-lg text-[11px] font-semibold transition ${active ? activeColors[st] : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}">
+                                                ${labels[st]}
+                                            </button>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Atualizar Lista de Compras Automática
+            const shoppingItems = appState.pantry.filter(i => i.status === 'low' || i.status === 'empty');
+            const shopContainer = document.getElementById('shopping-list-container');
+            document.getElementById('shopping-count-pill').textContent = shoppingItems.length;
+
+            if (shoppingItems.length === 0) {
+                shopContainer.innerHTML = `
+                    <div class="py-6 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                        Tudo abastecido! Nenhum item acabando no momento.
+                    </div>
+                `;
+            } else {
+                shopContainer.innerHTML = shoppingItems.map(item => `
+                    <div class="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/70 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-2 h-2 rounded-full ${item.status === 'empty' ? 'bg-rose-500' : 'bg-amber-500'}"></span>
+                            <div>
+                                <p class="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100">${item.name}</p>
+                                <span class="text-[10px] text-slate-400">${item.status === 'empty' ? 'Acabou' : 'Acabando'} • ${item.category}</span>
+                            </div>
+                        </div>
+                        <button onclick="updatePantryStatus('${item.id}', 'ok')" title="Marcar como comprado" class="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-lg transition">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            lucide.createIcons();
+        }
+
+        function markAllBought() {
+            const shoppingItems = appState.pantry.filter(i => i.status === 'low' || i.status === 'empty');
+            if (shoppingItems.length === 0) {
+                showToast('A lista de compras já está vazia!', 'info');
+                return;
+            }
+            shoppingItems.forEach(i => {
+                i.status = 'ok';
+                i.updatedAt = getTodayStr();
+            });
+            saveState();
+            renderAll();
+            showToast('Despensa reabastecida com sucesso!');
+        }
+
+        function copyShoppingList() {
+            const shoppingItems = appState.pantry.filter(i => i.status === 'low' || i.status === 'empty');
+            if (shoppingItems.length === 0) {
+                showToast('Nenhum item na lista de compras para copiar.', 'info');
+                return;
+            }
+
+            const lines = shoppingItems.map(i => `• ${i.name} (${i.status === 'empty' ? 'Acabou' : 'Acabando'})`);
+            const text = `🛒 *Lista de Compras da Casa*\n\n${lines.join('\n')}`;
+
+            // Fallback seguro para iframe usando textarea + execCommand
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Lista copiada! Cole no WhatsApp da casa.');
+            } catch (err) {
+                showToast('Não foi possível copiar automaticamente.', 'info');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // =========================================================================
+        // RENDERIZAÇÃO DO DASHBOARD E CÁLCULOS
+        // =========================================================================
+        function renderDashboard() {
+            const monthExpenses = getFilteredMonthExpenses();
+            const totalSpent = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+            const budget = appState.budget || 0;
+            const remaining = budget - totalSpent;
+            const percent = budget > 0 ? Math.min(Math.round((totalSpent / budget) * 100), 100) : 0;
+
+            // Cards Topo
+            document.getElementById('dash-total-spent').textContent = formatBRL(totalSpent);
+            document.getElementById('dash-expense-count').textContent = `${monthExpenses.length} ${monthExpenses.length === 1 ? 'lançamento registrado' : 'lançamentos registrados'}`;
+            
+            document.getElementById('dash-budget-value').textContent = formatBRL(budget);
+            document.getElementById('dash-budget-percent').textContent = `${budget > 0 ? Math.round((totalSpent / budget) * 100) : 0}%`;
+            
+            const bar = document.getElementById('dash-budget-bar');
+            bar.style.width = `${percent}%`;
+            bar.className = `h-full rounded-full transition-all duration-500 ${totalSpent > budget ? 'bg-rose-500' : percent > 80 ? 'bg-amber-500' : 'bg-brand-500'}`;
+            
+            document.getElementById('dash-budget-remaining').textContent = remaining >= 0 
+                ? `Disponível: ${formatBRL(remaining)}` 
+                : `Excedido em: ${formatBRL(Math.abs(remaining))}`;
+
+            // Média Justa por Pessoa (apenas gastos compartilhados)
+            const sharedExpenses = monthExpenses.filter(e => e.shared);
+            const totalShared = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
+            const numResidents = appState.residents.length || 1;
+            const fairShare = totalShared / numResidents;
+
+            document.getElementById('dash-per-person').textContent = formatBRL(fairShare);
+            document.getElementById('dash-residents-count').textContent = `Dividido entre ${numResidents} ${numResidents === 1 ? 'morador' : 'moradores'}`;
+
+            // Alertas Despensa
+            const lowItems = appState.pantry.filter(i => i.status === 'low' || i.status === 'empty');
+            document.getElementById('dash-pantry-alerts').textContent = `${lowItems.length} ${lowItems.length === 1 ? 'item' : 'itens'}`;
+            
+            const badge = document.getElementById('pantry-badge');
+            if (lowItems.length > 0) {
+                badge.textContent = lowItems.length;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            // Gráfico de Barras por Categoria
+            const categories = ['Mercado', 'Contas da Casa', 'Delivery & Lazer', 'Limpeza & Higiene', 'Outros'];
+            const catColors = {
+                'Mercado': 'bg-emerald-500',
+                'Contas da Casa': 'bg-sky-500',
+                'Delivery & Lazer': 'bg-amber-500',
+                'Limpeza & Higiene': 'bg-indigo-500',
+                'Outros': 'bg-slate-400'
+            };
+
+            const catContainer = document.getElementById('category-bars-container');
+            catContainer.innerHTML = categories.map(cat => {
+                const catTotal = monthExpenses.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0);
+                const pct = totalSpent > 0 ? Math.round((catTotal / totalSpent) * 100) : 0;
+                return `
+                    <div>
+                        <div class="flex justify-between text-xs sm:text-sm mb-1.5">
+                            <span class="font-medium text-slate-700 dark:text-slate-200">${cat}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-400">${pct}%</span>
+                                <span class="font-display font-bold text-slate-900 dark:text-white">${formatBRL(catTotal)}</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                            <div class="${catColors[cat]} h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Calculadora de Acerto de Contas
+            const balancesContainer = document.getElementById('settlement-balances');
+            const balances = appState.residents.map(resident => {
+                const paidShared = sharedExpenses.filter(e => e.payer === resident).reduce((s, e) => s + e.amount, 0);
+                const diff = paidShared - fairShare; // positivo = tem a receber, negativo = deve pagar
+                return { name: resident, paid: paidShared, diff };
+            });
+
+            balancesContainer.innerHTML = balances.map(b => `
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
+                    <div>
+                        <p class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100">${b.name}</p>
+                        <p class="text-[11px] text-slate-400">Pagou ${formatBRL(b.paid)} compartilhados</p>
+                    </div>
+                    <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${
+                        Math.abs(b.diff) < 0.05 ? 'bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300' :
+                        b.diff > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' :
+                        'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+                    }">
+                        ${Math.abs(b.diff) < 0.05 ? 'Quitado' : b.diff > 0 ? `+ ${formatBRL(b.diff)}` : `- ${formatBRL(Math.abs(b.diff))}`}
+                    </span>
+                </div>
+            `).join('');
+
+            // Algoritmo simples de sugestão de transferência
+            const suggestionBox = document.getElementById('settlement-suggestion');
+            const debtors = balances.filter(b => b.diff < -0.05).map(b => ({ ...b, amount: Math.abs(b.diff) }));
+            const creditors = balances.filter(b => b.diff > 0.05).map(b => ({ ...b, amount: b.diff }));
+            const transfers = [];
+
+            let i = 0, j = 0;
+            while (i < debtors.length && j < creditors.length) {
+                const transferAmt = Math.min(debtors[i].amount, creditors[j].amount);
+                transfers.push(`<strong>${debtors[i].name}</strong> transfere <strong>${formatBRL(transferAmt)}</strong> para <strong>${creditors[j].name}</strong>`);
+                debtors[i].amount -= transferAmt;
+                creditors[j].amount -= transferAmt;
+                if (debtors[i].amount < 0.05) i++;
+                if (creditors[j].amount < 0.05) j++;
+            }
+
+            if (transfers.length === 0) {
+                suggestionBox.innerHTML = `<div class="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-300"><i data-lucide="check-circle" class="w-4 h-4"></i> Tudo empatado entre os moradores!</div>`;
+            } else {
+                suggestionBox.innerHTML = `<p class="font-semibold text-brand-800 dark:text-brand-300 mb-1">💡 Sugestão para empatar o mês:</p><ul class="space-y-1 list-disc list-inside">${transfers.map(t => `<li>${t}</li>`).join('')}</ul>`;
+            }
+
+            // Últimos Gastos (Prévia)
+            const recentContainer = document.getElementById('dash-recent-expenses');
+            const recent = monthExpenses.slice(0, 4);
+            if (recent.length === 0) {
+                recentContainer.innerHTML = `<p class="py-6 text-center text-xs text-slate-400">Nenhum gasto neste mês ainda.</p>`;
+            } else {
+                recentContainer.innerHTML = recent.map(e => `
+                    <div class="py-3 flex items-center justify-between gap-2">
+                        <div>
+                            <p class="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100">${e.desc}</p>
+                            <p class="text-[11px] text-slate-400">${formatDateBR(e.date)} • ${e.category} • Pago por ${e.payer}</p>
+                        </div>
+                        <span class="font-display font-bold text-xs sm:text-sm text-slate-900 dark:text-white">${formatBRL(e.amount)}</span>
+                    </div>
+                `).join('');
+            }
+
+            // Lista de Compras (Prévia)
+            const shopPreview = document.getElementById('dash-shopping-preview');
+            if (lowItems.length === 0) {
+                shopPreview.innerHTML = `<p class="py-6 text-center text-xs text-slate-400">Despensa em dia! Nada faltando.</p>`;
+            } else {
+                shopPreview.innerHTML = lowItems.slice(0, 5).map(item => `
+                    <div class="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-xs">
+                        <span class="font-medium text-slate-700 dark:text-slate-200">${item.name}</span>
+                        <span class="px-2 py-0.5 rounded-md font-semibold ${item.status === 'empty' ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'}">
+                            ${item.status === 'empty' ? 'Acabou' : 'Acabando'}
+                        </span>
+                    </div>
+                `).join('');
+            }
+
+            lucide.createIcons();
+        }
+
+        // =========================================================================
+        // EXPORTAÇÃO PARA PLANILHA CSV (EXCEL / GOOGLE SHEETS)
+        // =========================================================================
+        function exportCSV() {
+            const expenses = getFilteredMonthExpenses();
+            if (expenses.length === 0) {
+                showToast('Não há gastos neste mês para exportar.', 'info');
+                return;
+            }
+
+            const headers = ['Data', 'Descricao', 'Categoria', 'Quem Pagou', 'Compartilhado', 'Valor (R$)'];
+            const rows = expenses.map(e => [
+                formatDateBR(e.date),
+                `"${e.desc.replace(/"/g, '""')}"`,
+                `"${e.category}"`,
+                `"${e.payer}"`,
+                e.shared ? 'Sim' : 'Nao',
+                e.amount.toFixed(2).replace('.', ',')
+            ]);
+
+            const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            const monthVal = document.getElementById('month-filter').value || 'geral';
+            link.href = url;
+            link.download = `casa-em-dia-gastos-${monthVal}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast('Planilha CSV exportada com sucesso!');
+        }
+
+        // =========================================================================
+        // INICIALIZAÇÃO GERAL
+        // =========================================================================
+        function renderAll() {
+            renderDashboard();
+            renderExpensesTable();
+            renderPantry();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            document.getElementById('month-filter').value = getCurrentMonthStr();
+            document.getElementById('exp-date').value = getTodayStr();
+            populateResidentSelects();
+            renderAll();
+        });
+    </script>
+</body>
+</html>
